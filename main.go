@@ -15,7 +15,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		fmt.Println("Unable to load .env file")
 	}
 
 	url := "wss://stream.aisstream.io/v0/stream"

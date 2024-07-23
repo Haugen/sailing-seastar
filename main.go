@@ -64,7 +64,7 @@ func main() {
 		// Any other incoming message, just log the message type for now, to get a sense of how often they come.
 		// https://aisstream.io/documentation#API-Message-Models
 		default:
-			fmt.Printf("%s - %s",
+			fmt.Printf("%s - %s\n",
 				time.Now().Format(time.RFC822), packet.MessageType)
 		}
 	}

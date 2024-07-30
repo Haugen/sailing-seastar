@@ -60,31 +60,30 @@ func main() {
 		done := make(chan struct{})
 
 		go func() {
-			_, p, err := ws.ReadMessage()
-			if err != nil {
-				close(done)
-			}
+			for {
+				_, p, err := ws.ReadMessage()
+				if err != nil {
+					close(done)
+					return
+				}
 
-			var packet aisstream.AisStreamMessage
+				var packet aisstream.AisStreamMessage
+				json.Unmarshal(p, &packet)
 
-			err = json.Unmarshal(p, &packet)
-			if err != nil {
-				close(done)
-			}
-
-			switch packet.MessageType {
-			// A vessels current position. The message we'll primarily use for saving the GPS coordinates.
-			// https://aisstream.io/documentation#PositionReport
-			case aisstream.POSITION_REPORT:
-				var positionReport aisstream.PositionReport
-				positionReport = *packet.Message.PositionReport
-				fmt.Printf("MMSI: %d Latitude: %f Longitude: %f\n",
-					positionReport.UserID, positionReport.Latitude, positionReport.Longitude)
-			// Any other incoming message, just log the message type for now, to get a sense of how often they come.
-			// https://aisstream.io/documentation#API-Message-Models
-			default:
-				fmt.Printf("%s\n",
-					packet.MessageType)
+				switch packet.MessageType {
+				// A vessels current position. The message we'll primarily use for saving the GPS coordinates.
+				// https://aisstream.io/documentation#PositionReport
+				case aisstream.POSITION_REPORT:
+					var positionReport aisstream.PositionReport
+					positionReport = *packet.Message.PositionReport
+					fmt.Printf("MMSI: %d Latitude: %f Longitude: %f\n",
+						positionReport.UserID, positionReport.Latitude, positionReport.Longitude)
+				// Any other incoming message, just log the message type for now, to get a sense of how often they come.
+				// https://aisstream.io/documentation#API-Message-Models
+				default:
+					fmt.Printf("%s\n",
+						packet.MessageType)
+				}
 			}
 		}()
 

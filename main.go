@@ -114,7 +114,7 @@ func main() {
 					shipStaticData = *packet.Message.ShipStaticData
 					fmt.Printf("Destination: %s\n", shipStaticData.Destination)
 
-					_, _, err := db.From("position_report").Insert(map[string]interface{}{
+					_, _, err := db.From("ship_static_data").Insert(map[string]interface{}{
 						"callsign":    shipStaticData.CallSign,
 						"destination": shipStaticData.Destination,
 						"etamonth":    shipStaticData.Eta.Month,

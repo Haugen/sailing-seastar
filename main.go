@@ -25,7 +25,7 @@ func connect() (*websocket.Conn, error) {
 	subMsg := aisstream.SubscriptionMessage{
 		APIKey:          aisKey,
 		BoundingBoxes:   [][][]float64{{{-90.0, -180.0}, {90.0, 180.0}}}, // bounding box for the entire world
-		FiltersShipMMSI: []string{"269057853"},
+		FiltersShipMMSI: []string{"266064000"},
 	}
 
 	subMsgBytes, _ := json.Marshal(subMsg)
@@ -83,8 +83,7 @@ func main() {
 				case aisstream.POSITION_REPORT:
 					var positionReport aisstream.PositionReport
 					positionReport = *packet.Message.PositionReport
-					fmt.Printf("MMSI: %d Latitude: %f Longitude: %f\n",
-						positionReport.UserID, positionReport.Latitude, positionReport.Longitude)
+					fmt.Printf("Latitude: %f Longitude: %f\n", positionReport.Latitude, positionReport.Longitude)
 
 					_, _, err := db.From("position_report").Insert(map[string]interface{}{
 						"cog":                       positionReport.Cog,
@@ -104,15 +103,33 @@ func main() {
 						"trueheading":               positionReport.TrueHeading,
 						"userid":                    positionReport.UserID,
 						"valid":                     positionReport.Valid,
-					}, true, "", "", "").Execute()
+					}, false, "", "", "").Execute()
+
+					if err != nil {
+						fmt.Println("Error writing to db:", err)
+					}
+
+				case aisstream.SHIP_STATIC_DATA:
+					var shipStaticData aisstream.ShipStaticData
+					shipStaticData = *packet.Message.ShipStaticData
+					fmt.Printf("Destination: %s\n", shipStaticData.Destination)
+
+					_, _, err := db.From("position_report").Insert(map[string]interface{}{
+						"callsign":    shipStaticData.CallSign,
+						"destination": shipStaticData.Destination,
+						"etamonth":    shipStaticData.Eta.Month,
+						"etaday":      shipStaticData.Eta.Day,
+						"etahour":     shipStaticData.Eta.Hour,
+						"etaminute":   shipStaticData.Eta.Minute,
+						"name":        shipStaticData.Name,
+					}, false, "", "", "").Execute()
 
 					if err != nil {
 						fmt.Println("Error writing to db:", err)
 					}
 
 				default:
-					fmt.Printf("%s\n",
-						packet.MessageType)
+					fmt.Printf("%s\n", packet.MessageType)
 				}
 			}
 		}()

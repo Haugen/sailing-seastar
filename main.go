@@ -13,7 +13,6 @@ import (
 
 func connect() (*websocket.Conn, error) {
 	aisKey := os.Getenv("AIS_STREAM_KEY")
-	MMSI := os.Getenv("MMSI")
 	url := "wss://stream.aisstream.io/v0/stream"
 
 	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
@@ -24,7 +23,7 @@ func connect() (*websocket.Conn, error) {
 	subMsg := aisstream.SubscriptionMessage{
 		APIKey:          aisKey,
 		BoundingBoxes:   [][][]float64{{{-90.0, -180.0}, {90.0, 180.0}}}, // bounding box for the entire world
-		FiltersShipMMSI: []string{MMSI},
+		FiltersShipMMSI: []string{"269057853"},
 	}
 
 	subMsgBytes, _ := json.Marshal(subMsg)

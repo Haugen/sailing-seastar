@@ -25,7 +25,7 @@ func connect() (*websocket.Conn, error) {
 	subMsg := aisstream.SubscriptionMessage{
 		APIKey:          aisKey,
 		BoundingBoxes:   [][][]float64{{{-90.0, -180.0}, {90.0, 180.0}}}, // bounding box for the entire world
-		FiltersShipMMSI: []string{"266064000"},
+		FiltersShipMMSI: []string{"232051463"},
 	}
 
 	subMsgBytes, _ := json.Marshal(subMsg)
@@ -86,23 +86,24 @@ func main() {
 					fmt.Printf("Latitude: %f Longitude: %f\n", positionReport.Latitude, positionReport.Longitude)
 
 					_, _, err := db.From("position_report").Insert(map[string]interface{}{
-						"cog":                       positionReport.Cog,
-						"communicationstate":        positionReport.CommunicationState,
-						"latitude":                  positionReport.Latitude,
-						"longitude":                 positionReport.Longitude,
-						"messageid":                 positionReport.MessageID,
-						"navigationalstatus":        positionReport.NavigationalStatus,
-						"positionaccuracy":          positionReport.PositionAccuracy,
-						"raim":                      positionReport.Raim,
-						"rateofturn":                positionReport.RateOfTurn,
-						"repeatindicator":           positionReport.RepeatIndicator,
-						"sog":                       positionReport.Sog,
-						"spare":                     positionReport.Spare,
-						"specialmanoeuvreindicator": positionReport.SpecialManoeuvreIndicator,
-						"timestamp":                 positionReport.Timestamp,
-						"trueheading":               positionReport.TrueHeading,
-						"userid":                    positionReport.UserID,
-						"valid":                     positionReport.Valid,
+						"cog":      positionReport.Cog,
+						"sog":      positionReport.Sog,
+						"location": fmt.Sprintf("POINT(%f %f)", positionReport.Longitude, positionReport.Latitude),
+					}, false, "", "", "").Execute()
+
+					if err != nil {
+						fmt.Println("Error writing to db:", err)
+					}
+
+				case aisstream.STANDARD_CLASS_B_POSITION_REPORT:
+					var positionReport aisstream.StandardClassBPositionReport
+					positionReport = *packet.Message.StandardClassBPositionReport
+					fmt.Printf("Latitude: %f Longitude: %f\n", positionReport.Latitude, positionReport.Longitude)
+
+					_, _, err := db.From("position_report").Insert(map[string]interface{}{
+						"cog":      positionReport.Cog,
+						"sog":      positionReport.Sog,
+						"location": fmt.Sprintf("POINT(%f %f)", positionReport.Longitude, positionReport.Latitude),
 					}, false, "", "", "").Execute()
 
 					if err != nil {

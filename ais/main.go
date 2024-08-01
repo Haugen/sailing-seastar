@@ -25,7 +25,7 @@ func connect() (*websocket.Conn, error) {
 	subMsg := aisstream.SubscriptionMessage{
 		APIKey:          aisKey,
 		BoundingBoxes:   [][][]float64{{{-90.0, -180.0}, {90.0, 180.0}}}, // bounding box for the entire world
-		FiltersShipMMSI: []string{"232051463"},
+		FiltersShipMMSI: []string{"265702970"},
 	}
 
 	subMsgBytes, _ := json.Marshal(subMsg)

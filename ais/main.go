@@ -85,7 +85,7 @@ func main() {
 					positionReport = *packet.Message.PositionReport
 					fmt.Printf("Latitude: %f Longitude: %f\n", positionReport.Latitude, positionReport.Longitude)
 
-					_, _, err := db.From("position_report").Insert(map[string]interface{}{
+					_, _, err := db.From("position_report").Insert(map[string]any{
 						"cog":      positionReport.Cog,
 						"sog":      positionReport.Sog,
 						"location": fmt.Sprintf("POINT(%f %f)", positionReport.Longitude, positionReport.Latitude),
@@ -100,7 +100,7 @@ func main() {
 					positionReport = *packet.Message.StandardClassBPositionReport
 					fmt.Printf("Latitude: %f Longitude: %f\n", positionReport.Latitude, positionReport.Longitude)
 
-					_, _, err := db.From("position_report").Insert(map[string]interface{}{
+					_, _, err := db.From("position_report").Insert(map[string]any{
 						"cog":      positionReport.Cog,
 						"sog":      positionReport.Sog,
 						"location": fmt.Sprintf("POINT(%f %f)", positionReport.Longitude, positionReport.Latitude),

@@ -3,11 +3,6 @@ import Layout from "../layouts/Layout.astro";
 import { supabase } from "../lib/supabase";
 
 const data = await supabase.rpc("all_position_reports");
-
-// supabase
-//     .from("position_report")
-//     .select("*")
-//     .then((res) => console.log(res.data));
 ---
 
 <Layout title="Sailing Seastar">
@@ -31,7 +26,10 @@ const data = await supabase.rpc("all_position_reports");
             '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
-    data.data.map((point) => {
-        L.marker([point.lat, point.long]).addTo(map);
-    });
+    L.polyline(
+        data.data.map((p) => [p.lat, p.long]),
+        { color: "green" },
+    ).addTo(map);
+
+    L.marker([last.lat, last.long]).addTo(map);
 </script>

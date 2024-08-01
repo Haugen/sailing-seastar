@@ -1,9 +1,37 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { supabase } from "../lib/supabase";
+
+const data = await supabase.rpc("all_position_reports");
+
+// supabase
+//     .from("position_report")
+//     .select("*")
+//     .then((res) => console.log(res.data));
 ---
 
 <Layout title="Sailing Seastar">
     <main>
-        <h1>Hey there!</h1>
+        <div id="map"></div>
     </main>
 </Layout>
+
+<style>
+    #map {
+        height: 100vh;
+    }
+</style>
+
+<script is:inline define:vars={{ data }}>
+    const last = data.data[data.data.length - 1];
+    var map = L.map("map").setView([last.lat, last.long], 11);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution:
+            '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    data.data.map((point) => {
+        L.marker([point.lat, point.long]).addTo(map);
+    });
+</script>

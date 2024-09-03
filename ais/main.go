@@ -3,52 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
-	aisstream "github.com/aisstream/ais-message-models/golang/aisStream"
-	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	"github.com/supabase-community/supabase-go"
 )
 
-func connect() (*websocket.Conn, error) {
-	aisKey := os.Getenv("AIS_STREAM_KEY")
-	url := "wss://stream.aisstream.io/v0/stream"
-
-	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	subMsg := aisstream.SubscriptionMessage{
-		APIKey:          aisKey,
-		BoundingBoxes:   [][][]float64{{{-90.0, -180.0}, {90.0, 180.0}}}, // bounding box for the entire world
-		FiltersShipMMSI: []string{"265702970"},
-	}
-
-	subMsgBytes, _ := json.Marshal(subMsg)
-	if err := ws.WriteMessage(websocket.TextMessage, subMsgBytes); err != nil {
-		return nil, err
-	}
-	fmt.Println("Connection open.")
-
-	return ws, nil
-}
-
-func reconnect() *websocket.Conn {
-	for {
-		c, err := connect()
-		if err != nil {
-			fmt.Println("Failed to connect. Retrying...")
-			time.Sleep(60 * time.Second)
-			continue
-		}
-
-		return c
-	}
-}
+var db *supabase.Client
 
 func main() {
 	err := godotenv.Load()
@@ -59,84 +24,121 @@ func main() {
 	API_URL := os.Getenv("SUPABASE_API_URL")
 	API_KEY := os.Getenv("SUPABASE_API_KEY")
 
-	db, err := supabase.NewClient(API_URL, API_KEY, nil)
+	newDb, err := supabase.NewClient(API_URL, API_KEY, nil)
+	db = newDb
+
 	if err != nil {
 		log.Fatal("cannot initalize Supabase client", err)
 	}
 
+	fmt.Println("Starting AIS service.")
+
 	for {
-		ws := reconnect()
-		done := make(chan struct{})
-
-		go func() {
-			for {
-				_, p, err := ws.ReadMessage()
-				if err != nil {
-					close(done)
-					return
-				}
-
-				var packet aisstream.AisStreamMessage
-				json.Unmarshal(p, &packet)
-
-				switch packet.MessageType {
-				case aisstream.POSITION_REPORT:
-					var positionReport aisstream.PositionReport
-					positionReport = *packet.Message.PositionReport
-					fmt.Printf("Latitude: %f Longitude: %f\n", positionReport.Latitude, positionReport.Longitude)
-
-					_, _, err := db.From("position_report").Insert(map[string]any{
-						"cog":      positionReport.Cog,
-						"sog":      positionReport.Sog,
-						"location": fmt.Sprintf("POINT(%f %f)", positionReport.Longitude, positionReport.Latitude),
-					}, false, "", "", "").Execute()
-
-					if err != nil {
-						fmt.Println("Error writing to db:", err)
-					}
-
-				case aisstream.STANDARD_CLASS_B_POSITION_REPORT:
-					var positionReport aisstream.StandardClassBPositionReport
-					positionReport = *packet.Message.StandardClassBPositionReport
-					fmt.Printf("Latitude: %f Longitude: %f\n", positionReport.Latitude, positionReport.Longitude)
-
-					_, _, err := db.From("position_report").Insert(map[string]any{
-						"cog":      positionReport.Cog,
-						"sog":      positionReport.Sog,
-						"location": fmt.Sprintf("POINT(%f %f)", positionReport.Longitude, positionReport.Latitude),
-					}, false, "", "", "").Execute()
-
-					if err != nil {
-						fmt.Println("Error writing to db:", err)
-					}
-
-				case aisstream.SHIP_STATIC_DATA:
-					var shipStaticData aisstream.ShipStaticData
-					shipStaticData = *packet.Message.ShipStaticData
-					fmt.Printf("Destination: %s\n", shipStaticData.Destination)
-
-					_, _, err := db.From("ship_static_data").Insert(map[string]interface{}{
-						"callsign":    shipStaticData.CallSign,
-						"destination": shipStaticData.Destination,
-						"etamonth":    shipStaticData.Eta.Month,
-						"etaday":      shipStaticData.Eta.Day,
-						"etahour":     shipStaticData.Eta.Hour,
-						"etaminute":   shipStaticData.Eta.Minute,
-						"name":        shipStaticData.Name,
-					}, false, "", "", "").Execute()
-
-					if err != nil {
-						fmt.Println("Error writing to db:", err)
-					}
-
-				default:
-					fmt.Printf("%s\n", packet.MessageType)
-				}
-			}
-		}()
-
-		<-done
-		ws.Close()
-		fmt.Println("Connection lost. Reconnecting...")
+		if err := runWithRecovery(worker); err != nil {
+			fmt.Printf("Worker stopped with error: %v", err)
+			fmt.Println("Restarting worker in 1 minute...")
+			time.Sleep(1 * time.Minute)
+		}
 	}
+}
+
+func runWithRecovery(fn func() error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic recovered: %v", r)
+		}
+	}()
+	return fn()
+}
+
+func worker() error {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		<-ticker.C
+		if err := callAPI(); err != nil {
+			fmt.Printf("API call failed: %v", err)
+		}
+	}
+}
+
+type Cat struct {
+	Height int    `json:"height"`
+	Width  int    `json:"width"`
+	Id     string `json:"id"`
+	Url    string `json:"url"`
+}
+type Ais struct {
+	Ais struct {
+		Mmsi              int     `json:"MMSI"`
+		Time              string  `json:"TIMESTAMP"`
+		Latitude          float64 `json:"LATITUDE"`
+		Longitude         float64 `json:"LONGITUDE"`
+		Course            float64 `json:"COURSE"`
+		Speed             float64 `json:"SPEED"`
+		Heading           int     `json:"HEADING"`
+		Navstat           int     `json:"NAVSTAT"`
+		Imo               int     `json:"IMO"`
+		Name              string  `json:"NAME"`
+		Callsign          string  `json:"CALLSIGN"`
+		Type              int     `json:"TYPE"`
+		A                 int     `json:"A"`
+		B                 int     `json:"B"`
+		C                 int     `json:"C"`
+		D                 int     `json:"D"`
+		Draught           float64 `json:"DRAUGHT"`
+		Destination       string  `json:"DESTINATION"`
+		Locode            string  `json:"LOCODE"`
+		EtaAis            string  `json:"ETA_AIS"`
+		Eta               string  `json:"ETA"`
+		Src               string  `json:"SRC"`
+		Zone              string  `json:"ZONE"`
+		Eca               bool    `json:"ECA"`
+		DistanceRemaining any     `json:"DISTANCE_REMAINING"`
+		EtaPredicted      any     `json:"ETA_PREDICTED"`
+	} `json:"AIS"`
+}
+
+func callAPI() error {
+	resp, err := http.Get("https://api.vesselfinder.com/vesselslist?userkey=WS-776925F8-8E1E9B")
+	// resp, err := http.Get("https://api.thecatapi.com/v1/images/search")
+	if err != nil {
+		return fmt.Errorf("HTTP GET request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned non-200 status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("could not read Response Body: %d", err)
+	}
+
+	var target []Ais
+	json.Unmarshal(body, &target)
+	ais := target[0].Ais
+
+	_, _, err = db.From("position_report").Insert(map[string]any{
+		"location":      fmt.Sprintf("POINT(%f %f)", ais.Longitude, ais.Latitude),
+		"time":          ais.Time,
+		"course":        ais.Course,
+		"speed":         ais.Speed,
+		"heading":       ais.Heading,
+		"draught":       ais.Draught,
+		"destination":   ais.Destination,
+		"eta_ais":       ais.EtaAis,
+		"eta":           ais.Eta,
+		"eta_predicted": ais.EtaPredicted,
+	}, false, "", "", "").Execute()
+
+	if err != nil {
+		fmt.Println("Error writing to db:", err)
+	}
+
+	fmt.Printf("Logged position at location %f %f \n", ais.Longitude, ais.Latitude)
+
+	return nil
 }

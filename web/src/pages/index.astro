@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { supabase } from "../lib/supabase";
 
-const data = await supabase.rpc("all_position_reports");
+const data = await supabase.rpc("all_locations");
 ---
 
 <Layout title="Sailing Seastar">

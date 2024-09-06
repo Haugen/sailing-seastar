@@ -52,7 +52,7 @@ func runWithRecovery(fn func() error) (err error) {
 }
 
 func worker() error {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(10*time.Minute + 1*time.Second)
 	defer ticker.Stop()
 
 	for {

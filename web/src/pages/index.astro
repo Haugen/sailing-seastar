@@ -18,8 +18,8 @@ const data = await supabase.rpc("all_locations");
 </style>
 
 <script is:inline define:vars={{ data }}>
-    const last = data.data[data.data.length - 1];
-    var map = L.map("map").setView([last.lat, last.long], 11);
+    const last = data.data[0];
+    var map = L.map("map").setView([last.lat, last.long], 14);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
         attribution:
